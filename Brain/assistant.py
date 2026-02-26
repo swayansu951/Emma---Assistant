@@ -1,5 +1,5 @@
 import ollama
-from explicitFunction import AIAssistantClass
+from abilities.functions import AIAssistantClass
 import re
 import json 
 import os
