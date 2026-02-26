@@ -1,5 +1,5 @@
 import ollama
-from explicitFunction import AIAssistantClass
+from abilities.functions import AIAssistantClass
 import re
 import json 
 import os
@@ -100,14 +100,14 @@ class ASSISTANT:
             self.messages = [
                 {"role": "system", "content": SYSTEM_PROMPT["normal assistant"]}
             ]
-
+        
     def start_ai(self, user_input: str):
 
         self.messages.append({'role': 'user', 'content': user_input})
-
+        
         # Generate response from Ollama
         try:
-            response = ollama.chat(model='llama3-abliterated:latest', messages=self.messages,stream=True,options={"keep_alive":0}) # lama get stoped after completing the task
+            response = ollama.chat(model='llama3-abliterated:latest', messages=self.messages,stream=True,options={"num_thread":4}) # lama get stoped after completing the task
             # ai_response = response['message']['content']
             full_response = ""
             sentence_buffer = ""
@@ -117,11 +117,11 @@ class ASSISTANT:
                 full_response += content
                 sentence_buffer += content
 
-                if len(sentence_buffer) > 10:
+                if any(p in content for p in [".","!","?","\n"]):
                     text_to_speak = re.sub(r'\[.*?\]', '', sentence_buffer).strip()
 
                     if text_to_speak:
-                        yield text_to_speak
+                        yield str(text_to_speak)
                     sentence_buffer= ""
 
             if sentence_buffer.strip():
@@ -138,11 +138,12 @@ class ASSISTANT:
 
             # Check for and execute system commands
     def _handle_commands(self,ai_response):
-            
+        action_feedback = ""
+
         # Handle all command types for both assistants
         if "[PLAY_MUSIC:" in ai_response:
             match = re.search(r'\[PLAY_MUSIC:(.*?)\]', ai_response)
-            if match: self.assistant.play_youtube_music(match.group(1))
+            if match: action_feedback = self.assistant.play_youtube_music(match.group(1))
         
         elif "[SEARCH_WEB:" in ai_response:
             match = re.search(r'\[SEARCH_WEB:(.*?)\]', ai_response)
