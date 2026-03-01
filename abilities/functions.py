@@ -13,9 +13,7 @@ from pywinauto import findwindows, Desktop
 # import winapps ## going to be implemented on future
 import hashlib
 
-path = "C:/Users/swaya/Desktop/"
 desktop_app = Path.home()/ "Desktop"
-all_apps = os.listdir(path)
 apps = [app for app in desktop_app.iterdir() if app.is_file()]
 
 class AIAssistantClass:
