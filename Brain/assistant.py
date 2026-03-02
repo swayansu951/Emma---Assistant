@@ -198,7 +198,19 @@ class ASSISTANT:
         except Exception as e:
             print(f"Error : {e}")
             return
+        if tool == "OPEN_APP":
+            app = args.get("app")
+            if app:
+                self.runtime_status["opened_app"].append(app)
 
+        elif tool == "OPEN_WEBSITE":
+            url = args.get("url")
+            if url:
+                self.runtime_status["opened_url"].append(url)
+        elif tool == "CLOSE_APP":
+            app = args.get("app")
+            if app in self.runtime_status["opened_app"]:
+                self.runtime_status["opened_app"].remove(app)
        
         print(f"\n{'Emma'}: {ai_response}")
                
