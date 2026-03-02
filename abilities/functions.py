@@ -1,28 +1,32 @@
 from AppOpener import open
 import os
+import json
 from pathlib import Path
-import psutil
+# import psutil
 import webbrowser
 import urllib.parse
 import pyautogui
 import time
+from datetime import datetime
 import subprocess
 from pycaw.pycaw import AudioUtilities
 # import winreg   ## going to be implemented on future
 from pywinauto import findwindows, Desktop
 # import winapps ## going to be implemented on future
-import hashlib
+# import hashlib
 
-path = "C:/Users/swaya/Desktop/"
+# path = "C:/Users/swaya/Desktop/"
 desktop_app = Path.home()/ "Desktop"
-all_apps = os.listdir(path)
+# all_apps = os.listdir(path)
 apps = [app for app in desktop_app.iterdir() if app.is_file()]
+opened_app = []
+important_folder = "important_docs"
 
 class AIAssistantClass:
     def app_opener(self,app_name):
             try:
                 cmdd = f'PowerShell -Command "explorer.exe shell:AppsFolder\\$( (Get-StartApps | Where-Object {{$_.Name -like \'{app_name}*\'}}).AppID )"'
-                full_path = os.path.join(path, app_name)
+                full_path = os.path.join(apps, app_name)
                 opened = False
                 cmd = f'PowerShell -Command "Get-StartApps | Where-Object {{$_.Name -like \'*{app_name}*\'}}"'
                 result = subprocess.run(cmd, capture_output=True, text=True, shell=True)
@@ -32,7 +36,7 @@ class AIAssistantClass:
                         os.startfile(full_path)
                         print("file opened by startfile\n")
                         opened =True
-                       
+                        opened_app.append(app_name)
                     else:
                         opened = False
                         print(f"{app_name} does not end with .lnk")
@@ -43,11 +47,12 @@ class AIAssistantClass:
                         os.system(f"start {app_name.lower()}:")
                         print("file opened using os.system\n")
                         opened =True
+                        opened_app.append(app_name)
                         return True
                     else:
                         try:
                             subprocess.Popen(cmdd, shell=True)
-                            print(f" Launching {app_name} via AppID...")
+                            print(f" Launching {app_name} via AppID.    ..")
                         except Exception as e:
                             print(f" Failed: {e}")
                         return True
@@ -55,7 +60,7 @@ class AIAssistantClass:
                 else:
                     print("not such directory")
                     print(apps)
-                    for f in all_apps:
+                    for f in apps:
                         if app_name.lower() in f.lower():
                             print(f"did you mean: {f}?")
                             return True
@@ -136,27 +141,55 @@ class AIAssistantClass:
         except Exception as e:
             return f" error : {e}"
     
-    def pause_song(self):
+    def pause_song(self, timeout =5):
+        start = time.time()
+
         print("song pause\n")
-        while True:
+
+        while time.time() - start < timeout:
+        
             audio_playing = False
             sessions = AudioUtilities.GetAllSessions()
             for session in sessions:
                 if session.State == 1:
+                    pyautogui.press('playpause')
                     audio_playing =True
-                    break
-            if audio_playing:
-                print("[+] audio detected")
-                pyautogui.press('playpause')
-                print("music paused")
-                break
+                    return "music paused"
+                
             time.sleep(0.5)
+        return "no active audio session found"
 
-    def close_search(self):
+    def important_notes(self,notes,filename=None):
+        new_note = {"time":datetime.now().strftime("%H:%M %y-%m-%d"),
+                    "notes":notes}
         try:
-            close=False
-            pyautogui.hotkey('ctrl','w')
+            if not os.path.exists(important_folder):
+                os.makedirs(important_folder)
+            if filename is None:
+                filename = os.path.join(important_folder,"important.json")
+            if os.path.exists(filename):
+                with open(filename, 'r+', encoding='utf-8') as f:
+                    try:
+                        data = json.load(f)
+                    except json.JSONDecodeError:
+                        data=[]
+                    if not isinstance(data,list):
+                        data =[]
+                    data.append(new_note)
+                    
+                    f.seek(0)
+                    json.dump(data,f,indent=2)
+
         except Exception as e:
+            return f"error : {e}"
+    def close_search(self):
+        close=False
+        try:
+            pyautogui.hotkey('ctrl','w')
+            close =True
+            return None
+        except Exception as e:
+            close =False
             return f"error : {e}"
     
     # def system_details(self):
@@ -189,6 +222,7 @@ class AIAssistantClass:
             if title and name.lower() in title.lower():
                 matches.append(title)
 
+
         try:
             blacklist = ["taskbar", "program manager", "start", "desktop"]
             
@@ -200,12 +234,13 @@ class AIAssistantClass:
                 return False
 
             found_and_closed = False
-            for title in titles:
+            for title in titles and title in opened_app:
                 # 4. Final check against blacklist
                 if title.lower() not in blacklist:
                     print(f"Attempting to close: {title}")
                     # 5. Use the EXACT title found in the list for taskkill
                     subprocess.call(f'taskkill /F /FI "WINDOWTITLE eq {title}" /T', shell=True)
+                    opened_app.remove(name)
                     found_and_closed = True
         
             if found_and_closed:
@@ -229,7 +264,7 @@ class AIAssistantClass:
         try:
             pyautogui.FAILSAFE = True
             os.system(f"start {app_name.lower()}:")
-            time.sleep(3)
+            time.sleep(7)
 
             pyautogui.hotkey('ctrl', 'f')
             time.sleep(1)     
@@ -248,7 +283,10 @@ class AIAssistantClass:
             return f"Message sent to {contact} via {app_name}"
         except Exception as e:
             return f"Error sending message: {e}"
-
+    
+    def apps_opened(self):
+        print(opened_app)
+        return 
         # os.system(f"taskkill /F /IM {app_name}.exe /T")
         # print("completely closed the app :)")
  

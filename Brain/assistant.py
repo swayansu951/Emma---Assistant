@@ -8,29 +8,45 @@ from pathlib import Path
 
 # 1. Define the AI DNA
 SYSTEM_PROMPT = {"normal assistant":"""
-you are an assistant, having all contol over users computer but under user's supervision, do whatever when boss(user) orders, maintain a safety boundary, double ask everything if boss tries to delete or open, respect your boss's every words.
+you are an assistant, do tasks under user's supervision, do whatever boss(user) orders, maintain a safety boundary, do not run anything by yourself, double ask every task when boss orders to do, respect your boss's every words.
 make a preview about the work the user told to do, and remember the apps or file you have opened and when boss says to close or delete recall the name and use that.
+You must output at most one tool command per reply.
+Never combine multiple commands in a single answer.
+double ask every task when boss orders to do
+When you want to use a tool, output ONLY a JSON object
+on a single line at the end of your reply.
 
+Format:
+
+{"tool":"TOOL_NAME","args":{...}}
+
+Rules:
+- Output at most one tool call
+- Do not wrap it in markdown
+- Do not explain the JSON
+- Normal text must come before the JSON
+                 
 Examples: 
-- 'Of course, boss [EXECUTE_APP:netflix] Opening Netflix'
-- 'Right away! [PLAY_MUSIC:Taylor Swift] '
-- 'let me search that for you boss [SEARCH_WEB:best restaurants nearby]'
+- 'Of course, boss Opening Netflix'
+- 'Right away!'
+- 'let me search that for you boss'
 
-Additional capabilities:
-- To read files: [READ_FILE:path]
-- To write files: [WRITE_FILE:path:content]
-- To execute code: [EXEC_CODE:language:code]
-- To play music: [PLAY_MUSIC:song/artist name]
-- To search web: [SEARCH_WEB:search query]
-- To open website: [OPEN_WEBSITE:url]
-- To show all apps on desktop: [SHOW_ALL_APPS:]
-- To close apps: [CLOSE_APP: app_name]
-- To send text message: [WRITE_TEXT: app_name, contact, text]
-- To execute apps: [OPEN_APP:app_name]
-- To open camera: [CAMERA:]
-- To show all running apps: [APP_RUNNING:]
-- To pause music palying: [PAUSE_MUSIC:]
+Available capabilities:
 
+OPEN_APP -> {"tool":"OPEN_APP","args":{"app":"notepad"}}
+CAMERA -> {"tool":"CAMERA","args":{}}
+CHROME -> {"tool":"CHROME","args":{}}
+OPEN_WEBSITE -> {"tool":"OPEN_WEBSITE","args":{"url":"google.com"}}
+SEARCH_WEBSITE -> {"tool":"SEARCH_WEBSITE","args":{"query":"python asyncio"}}
+CLOSE_APP -> {"tool" : "CLOSE_APP", "args" : {"app":"chrome"}}
+PLAY_MUSIC -> {"tool" : "PLAY_MUSIC", "args" : {"query":"music name"}}
+APP_RUNNING -> {"tool" : "APP_RUNNING", "args": {}}
+PAUSE_MUSIC -> {"tool" : "PAUSE_MUSIC", "args": {}}
+SAVE_NOTES -> {"tool" : "SAVE_NOTES", "args" : {"notes" : "I have to change my PC desk."}}
+WRITE_MESSAGE -> {"tool" : "WRITE_MESSAGE", "args" : {"app" : "whatsapp" , "contact" : "rahul", "text" : "hello, how are you?"}}
+                 
+
+                 
 if boss(user) tells you to send some message or email and tells you to mention yourself then do: [Emma] i am boss's assitant....
 """}
 
@@ -51,7 +67,10 @@ def save_chat(messages, assistant_type, filename=None):
         else:
             chat_data = {"normal assistant": []}
         
-        # Add current session with timestamp
+        if assistant_type not in chat_data:
+            chat_data[assistant_type] = []
+
+        # Add current session
         chat_session = {
             "timestamp": datetime.now().isoformat(),
             "messages": messages
@@ -87,15 +106,33 @@ def load_chat_history(assistant_type, filename=None):
 class ASSISTANT:
     def __init__(self):
 
+        self.runtime_status = {
+            "opened_app" : [],
+            "opened_url" : []
+        }
         # tools
         self.assistant = AIAssistantClass()
-
+        self.command_registry = {
+            "OPEN_APP": lambda args : self.assistant.app_opener(args.get("app")),
+            "CAMERA": lambda args : self.assistant.open_camera(),
+            "CHROME": lambda args : self.assistant.open_google(),
+            "OPEN_WEBSITE" : lambda args : self.assistant.open_website(args.get("url")),
+            "SEARCH_WEBSITE" : lambda args : self.assistant.search_web(args.get("query")),
+            "CLOSE_APP": lambda args: self.assistant.close_apps(args.get("app")),
+            "PLAY_MUSIC" : lambda args : self.assistant.play_youtube_music(args.get("query")),
+            "APP_RUNNING": lambda args : self.assistant.list_running_apps(),
+            "PAUSE_MUSIC": lambda args: self.assistant.pause_song(),
+            "SAVE_NOTES" : lambda args : self.assistant.important_notes(args.get("notes")),
+            "WRITE_MESSAGE" : lambda args : self.assistant.write_text(args.get("app"),
+                                                                      args.get("contact"),
+                                                                      args.get("text"))
+        }
         # load memory
         history = load_chat_history("normal assistant")
 
         if history:
             # load last session
-            self.messages = history[-1]["messages"]
+            self.messages = history[-1]["messages"][-20:]
         else:
             self.messages = [
                 {"role": "system", "content": SYSTEM_PROMPT["normal assistant"]}
@@ -107,7 +144,7 @@ class ASSISTANT:
         
         # Generate response from Ollama
         try:
-            response = ollama.chat(model='llama3-abliterated:latest', messages=self.messages,stream=True,options={"num_thread":4}) # lama get stoped after completing the task
+            response = ollama.chat(model='llama3-abliterated:latest', messages=self.messages,stream=True,options={"num_thread":4,"keep_alive":"2m"}) 
             # ai_response = response['message']['content']
             full_response = ""
             sentence_buffer = ""
@@ -137,84 +174,33 @@ class ASSISTANT:
             yield "sorry boss my brain got stalled :("
 
             # Check for and execute system commands
-    def _handle_commands(self,ai_response):
-        action_feedback = ""
-
-        # Handle all command types for both assistants
-        if "[PLAY_MUSIC:" in ai_response:
-            match = re.search(r'\[PLAY_MUSIC:(.*?)\]', ai_response)
-            if match: action_feedback = self.assistant.play_youtube_music(match.group(1))
+    def _handle_commands(self,ai_response : str):
         
-        elif "[SEARCH_WEB:" in ai_response:
-            match = re.search(r'\[SEARCH_WEB:(.*?)\]', ai_response)
-            if match: self.assistant.search_web(match.group(1))
+        lines: list[str] = [l.strip() for l in ai_response.strip().splitlines() if l.strip()]
         
-        elif "[OPEN_WEBSITE:" in ai_response:
-            match = re.search(r'\[OPEN_WEBSITE:(.*?)\]', ai_response)
-            if match: self.assistant.open_website(match.group(1)) 
-                
-        elif "[OPEN_APP:" in ai_response:
-            match = re.search(r'\[OPEN_APP:(.*?)\]', ai_response)
-            if match: self.assistant.app_opener(match.group(1))
-            
-        elif "[READ_FILE:" in ai_response:
-            match = re.search(r'\[READ_FILE:(.*?)\]', ai_response)
-            if match: self.assistant.read_system_file(match.group(1))
-                
-        elif "[WRITE_FILE:" in ai_response:
-            match = re.search(r'\[WRITE_FILE:(.*?):(.*?)\]', ai_response)
-            if match: self.assistant.write_system_file(match.group(1), match.group(2))
-            
-        elif "[EXEC_CODE:" in ai_response:
-            match = re.search(r'\[EXEC_CODE:(.*?):(.*?)\]', ai_response)
-            if match: self.assistant.execute_code(match.group(1), match.group(2))
+        if not lines: return
 
-        elif "[CLOSE_APP:" in ai_response:
-            match = re.search(r'\[CLOSE_APP:(.*?)\]', ai_response)
-            if match: self.assistant.close_apps(match.group(1))
-                
-        elif "[SHOW_ALL_APPS:" in ai_response:
-            match = re.search(r'\[SHOW_ALL_APPS:(.*?)\]',ai_response)
-            if match: self.assistant.all_appications()
-                
-        elif "[WRITE_TEXT:" in ai_response:
-            match = re.search(r'\[WRITE_TEXT:(.*?)\]',ai_response)
-            if match: 
-                params = match.group(1)
-                parts = [p.strip() for p in params.split(',')]
-                if len(parts) >= 3: 
-                    self.assistant.write_text(parts[0], parts[1],','.join(parts[2:]))
-                                                              
-                else: 
-                    print("Invalid WRITE_TEXT format. Expected: [WRITE_TEXT:app,contact,text]")
-                       
-        elif "[APP_RUNNING:" in ai_response:
-            match = re.search(r'\[APP_RUNNING:(.*?)\]',ai_response)
-            if match: self.assistant.list_running_apps()
+        last = lines[-1]
+        if not last.startswith('{'): return
+        
+        try:
+            payload = json.loads(last)
+        except Exception as e: print (f"error : {e}")
+        
+        tool = payload.get("tool")
+        args = payload.get("args", {})
+        handler = self.command_registry.get(tool)
 
-        elif "[PAUSE_MUSIC:" in ai_response:
-            action_feedback = self.assistant.pause_song()
-            print(action_feedback)
+        if not handler : return
 
-        elif "[CAMERA:" in ai_response:
-            action_feedback = self.assistant.open_camera()
-            print(action_feedback)
-        elif "[BROWSER]" in ai_response:
-            action_feedback = self.assistant.open_google()
-            print(action_feedback)
-        elif "[NOTEPAD]" in ai_response:
-            action_feedback = self.assistant.app_opener("notepad")
-            print(action_feedback)
-        elif "[CALC]" in ai_response:
-            action_feedback = self.assistant.app_opener("calc")
-            print(action_feedback)
-        elif "[BATTERY]" in ai_response:
-            action_feedback = "Battery check not implemented in this version"
-            print(action_feedback)
+        try: 
+            handler(args)
+        except Exception as e:
+            print(f"Error : {e}")
+            return
+
+       
         print(f"\n{'Emma'}: {ai_response}")
-        if action_feedback:
-            print(f"--- System: {action_feedback} ---")
-            
-   
+               
     def shutdown(self):
         save_chat(self.messages,"normal assistant")
