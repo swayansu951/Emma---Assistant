@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 AppOpener
 docopt      
 ffmpeg
@@ -12,3 +13,19 @@ pywinauto
 pycaw
 sounddevice
 urllib
+=======
+AppOpener
+docopt      
+ffmpeg
+faster-whisper
+kokoro soundfile
+ollama
+psutil
+pyautogui
+pathlib
+pytorch
+pywinauto
+pycaw
+sounddevice
+urllib
+>>>>>>> 103a2f8647994361b12316f742c85098dc2d065e
