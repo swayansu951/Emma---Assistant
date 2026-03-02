@@ -1,0 +1,14 @@
+AppOpener
+docopt      
+ffmpeg
+faster-whisper
+kokoro soundfile
+ollama
+psutil
+pyautogui
+pathlib
+pytorch
+pywinauto
+pycaw
+sounddevice
+urllib
