@@ -15,13 +15,7 @@ from pywinauto import findwindows, Desktop
 # import winapps ## going to be implemented on future
 # import hashlib
 
-<<<<<<< HEAD
-# path = "C:/Users/swaya/Desktop/"
 desktop_app = Path.home()/ "Desktop"
-# all_apps = os.listdir(path)
-=======
-desktop_app = Path.home()/ "Desktop"
->>>>>>> ec1e931eef0e42ceae74b9f400c16621ba3097ad
 apps = [app for app in desktop_app.iterdir() if app.is_file()]
 opened_app = []
 important_folder = "important_docs"
