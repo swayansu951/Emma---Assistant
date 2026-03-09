@@ -14,6 +14,8 @@ from pycaw.pycaw import AudioUtilities
 from pywinauto import findwindows, Desktop
 # import winapps ## going to be implemented on future
 # import hashlib
+import builtins
+# from Research.local_RAG import LocalRag
 
 desktop_app = Path.home()/ "Desktop"
 apps = [app for app in desktop_app.iterdir() if app.is_file()]
@@ -24,10 +26,16 @@ class AIAssistantClass:
     def app_opener(self,app_name):
             try:
                 cmdd = f'PowerShell -Command "explorer.exe shell:AppsFolder\\$( (Get-StartApps | Where-Object {{$_.Name -like \'{app_name}*\'}}).AppID )"'
-                full_path = os.path.join(apps, app_name)
+                full_path = next(
+                    (p for p in apps if p.name.lower() == app_name.lower()),
+                    None
+                )
                 opened = False
                 cmd = f'PowerShell -Command "Get-StartApps | Where-Object {{$_.Name -like \'*{app_name}*\'}}"'
                 result = subprocess.run(cmd, capture_output=True, text=True, shell=True)
+                if not app_name:
+                    raise ValueError("app_name cannot be None")
+                
                 if app_name.endswith('.lnk'):
                     if os.path.exists(full_path):
                         print("Success! File found.")
@@ -59,7 +67,7 @@ class AIAssistantClass:
                     print("not such directory")
                     print(apps)
                     for f in apps:
-                        if app_name.lower() in f.lower():
+                        if app_name.lower() in f.name.lower():
                             print(f"did you mean: {f}?")
                             return True
             except Exception as e:
@@ -85,16 +93,6 @@ class AIAssistantClass:
             return f"Playing '{query}' on YouTube Music"
         except Exception as e:
             return f"Error playing music: {str(e)}"
-        
-    # def play_youtube_music(self, query):
-    #     """Search and play music on YouTube Music"""
-    #     try:
-    #         encoded_query = urllib.parse.quote(query)
-    #         url = f"https://music.youtube.com/search?q={encoded_query}"
-    #         webbrowser.open(url)
-    #         return f"Playing '{query}' on YouTube Music"
-    #     except Exception as e:
-    #         return f"Error playing music: {str(e)}"
         
     def open_netflix(self, query):
         """Search and play movie on Netflix"""
@@ -158,36 +156,67 @@ class AIAssistantClass:
         return "no active audio session found"
 
     def important_notes(self,notes,filename=None):
-        new_note = {"time":datetime.now().strftime("%H:%M %y-%m-%d"),
-                    "notes":notes}
-        try:
-            if not os.path.exists(important_folder):
-                os.makedirs(important_folder)
-            if filename is None:
-                filename = os.path.join(important_folder,"important.json")
-            if os.path.exists(filename):
-                with open(filename, 'r+', encoding='utf-8') as f:
-                    try:
-                        data = json.load(f)
-                    except json.JSONDecodeError:
-                        data=[]
-                    if not isinstance(data,list):
-                        data =[]
-                    data.append(new_note)
-                    
-                    f.seek(0)
-                    json.dump(data,f,indent=2)
+        if not notes:
+            return "No notes provided."
 
+        important_folder = "important_docs"
+
+        os.makedirs(important_folder, exist_ok=True)
+
+        if filename is None:
+            filename = os.path.join(important_folder, "important.json")
+
+        print("Saving notes to:", os.path.abspath(filename))
+
+        new_note = {
+            "time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "notes": notes
+        }
+
+        data = []
+
+        if os.path.isfile(filename):
+            try:
+                with builtins.open(filename, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+            except Exception:
+                data = []
+
+        if not isinstance(data, list):
+            data = []
+
+        data.append(new_note)
+
+        # Write back
+        with builtins.open(filename, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2, ensure_ascii=False)
+
+        return "Notes saved successfully."
+        
+    def read_notes(self,filename=None):
+        important_folder = "important_docs"  
+        if not os.path.exists(important_folder):
+            os.makedirs(important_folder)
+        if filename is None:
+            filename = os.path.join(important_folder,"important.json")
+        if not os.path.exists(filename):
+            return []
+        try:
+            with builtins.open(filename, 'r', encoding="utf-8") as f:
+                data = json.load(f)  
         except Exception as e:
-            return f"error : {e}"
+            return f"Error : {e}"
+        
+        return data
+        
     def close_search(self):
         close=False
         try:
             pyautogui.hotkey('ctrl','w')
-            close =True
+            close = True
             return None
         except Exception as e:
-            close =False
+            close = False
             return f"error : {e}"
     
     # def system_details(self):
@@ -232,13 +261,14 @@ class AIAssistantClass:
                 return False
 
             found_and_closed = False
-            for title in titles and title in opened_app:
-                # 4. Final check against blacklist
+            for title in titles:
+                if title not in opened_app: continue
+
                 if title.lower() not in blacklist:
                     print(f"Attempting to close: {title}")
                     # 5. Use the EXACT title found in the list for taskkill
                     subprocess.call(f'taskkill /F /FI "WINDOWTITLE eq {title}" /T', shell=True)
-                    opened_app.remove(name)
+                    opened_app.remove(title)
                     found_and_closed = True
         
             if found_and_closed:
@@ -281,7 +311,7 @@ class AIAssistantClass:
             return f"Message sent to {contact} via {app_name}"
         except Exception as e:
             return f"Error sending message: {e}"
-    
+
     def apps_opened(self):
         print(opened_app)
         return 

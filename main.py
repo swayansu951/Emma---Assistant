@@ -28,39 +28,41 @@ def main():
     ear = STTEngine()
     voice = TTSEngine()
     brain = ASSISTANT()
-    print("*"*8, "Assistant ACtivated", "*"*8)
+    print("*"*10, "Assistant ACtivated", "*"*10)
     r = sr.Recognizer()
     r.energy_threshold = 230
     r.pause_threshold =0.9
     r.dynamic_energy_threshold= True
     
     while True:
-        cmd = input("Press ENTER to speak (type q + ENTER to quit): ").strip().lower()
-        
+        raw = input("\nPress ENTER to speak (type q + ENTER to quit): ")
+        cmd = raw.strip().lower()
+        user_text = ""
         if cmd == "q":
                 print("Shutting down...")
                 brain.shutdown()
                 break
         try:
-            with sr.Microphone(sample_rate=16000) as source:
-                print("Emma Listening..")
-                audio = r.listen(source,phrase_time_limit=None)
-                audio_stream = io.BytesIO(audio.get_wav_data())
-                # ear
-                user_text = ear.transcribe(audio_stream)
-               
+            if raw.strip():
+                user_text = raw.strip()
+            else:
+                try:
+                    with sr.Microphone(sample_rate=16000) as source:
+                        print("Emma Listening..")
+                        audio = r.listen(source,phrase_time_limit=None)
+                        audio_stream = io.BytesIO(audio.get_wav_data())
+                        # ear
+                        user_text = ear.transcribe(audio_stream)
+                except Exception as e :
+                    print(f"Error : {e}")
+                    continue
+
             if not user_text.strip(): 
                 print("can't catch that")
                 continue
 
-            print("listening now....")
-    
+            print("Processing it now....")
             sd.wait()
-                    
-            # #load the audio file
-            # audio_file = "record.wav"
-            # wav.write(audio_file,fs,recording)
-          
             print(f"you : {user_text}")
            
             if user_text:
@@ -76,9 +78,11 @@ def main():
                 
                 print("Emma : ",end="",flush=True)
                 
-                response = brain.start_ai(user_text)
-                # voice
+                response = brain.normal_assistant(user_text)
+                # voice\
+                spoken =False
                 for sentence in response:
+                    spoken = True
                     print(sentence, end=" ", flush=True)
                     voice.speak(sentence)
 

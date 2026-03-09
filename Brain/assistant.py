@@ -5,11 +5,15 @@ import json
 import os
 from datetime import datetime
 from pathlib import Path
+from Research.router import LRAG
+from Research.local_RAG import LocalRag
+from Research.pdf_reader import PDFREADER
 
 # 1. Define the AI DNA
 SYSTEM_PROMPT = {"normal assistant":"""
-you are an assistant, do tasks under user's supervision, do whatever boss(user) orders, maintain a safety boundary, do not run anything by yourself, double ask every task when boss orders to do, respect your boss's every words.
+you are a helpfull assistant, do tasks under user's supervision, do whatever boss(user) orders, maintain a safety boundary, do not run anything by yourself, double ask every task when boss orders to do, respect your boss's every words.
 make a preview about the work the user told to do, and remember the apps or file you have opened and when boss says to close or delete recall the name and use that.
+use tools when boss orders you to do, never run anything by yourself, always ask before doing anything, if boss says to do something and you don't know how to do it, say "I don't know how to do that, boss. Can you please guide me?" and wait for instructions.
 You must output at most one tool command per reply.
 Never combine multiple commands in a single answer.
 double ask every task when boss orders to do
@@ -27,23 +31,25 @@ Rules:
 - Normal text must come before the JSON
                  
 Examples: 
-- 'Of course, boss Opening Netflix'
+- 'Of course, boss Opening Netflix {"tool":"OPEN_APP","args":{"app":"Netflix"}}'
 - 'Right away!'
-- 'let me search that for you boss'
+- 'let me search that for you boss {"tool":"SEARCH_WEBSITE","args":{"query":"how to integrate web access?"}}'
 
 Available capabilities:
 
-OPEN_APP -> {"tool":"OPEN_APP","args":{"app":"notepad"}}
-CAMERA -> {"tool":"CAMERA","args":{}}
-CHROME -> {"tool":"CHROME","args":{}}
-OPEN_WEBSITE -> {"tool":"OPEN_WEBSITE","args":{"url":"google.com"}}
-SEARCH_WEBSITE -> {"tool":"SEARCH_WEBSITE","args":{"query":"python asyncio"}}
-CLOSE_APP -> {"tool" : "CLOSE_APP", "args" : {"app":"chrome"}}
-PLAY_MUSIC -> {"tool" : "PLAY_MUSIC", "args" : {"query":"music name"}}
-APP_RUNNING -> {"tool" : "APP_RUNNING", "args": {}}
-PAUSE_MUSIC -> {"tool" : "PAUSE_MUSIC", "args": {}}
-SAVE_NOTES -> {"tool" : "SAVE_NOTES", "args" : {"notes" : "I have to change my PC desk."}}
-WRITE_MESSAGE -> {"tool" : "WRITE_MESSAGE", "args" : {"app" : "whatsapp" , "contact" : "rahul", "text" : "hello, how are you?"}}
+- To open app : {"tool" : "OPEN_APP", "args" : {"app":"app_name"}}
+- To open camera : {"tool" : "CAMERA", "args" : {}}
+- To open chrome : {"tool" : "CHROME", "args" : {}}
+- To open chrome : {"tool" : "OPEN_WEBSITE", "args" : {"url":"google.com"}}
+- To search a website : {"tool":"SEARCH_WEBSITE", "args" : {"query":"python asyncio"}}
+- To close a app : {"tool" : "CLOSE_APP", "args" : {"app":"app_name"}}
+- To play music : {"tool" : "PLAY_MUSIC", "args" : {"query":"music name"}}
+- To show all app running : {"tool" : "APP_RUNNING", "args": {}}
+- To pause music : {"tool" : "PAUSE_MUSIC", "args": {}}
+- To save important notes : {"tool" : "SAVE_NOTES", "args" : {"notes" : "I have to change my PC desk."}}
+- To send message : {"tool" : "WRITE_MESSAGE", "args" : {"app" : "whatsapp" , "contact" : "rahul", "text" : "hello, how are you?"}}
+- To read important notes : {"tool" : "READ_NOTES", "args" : {}}
+- To clear conversation : {"tool" : "CLEAR_CONVERSATION", "args" : {}}
                  
 
                  
@@ -61,11 +67,15 @@ def save_chat(messages, assistant_type, filename=None):
             filename = os.path.join(chat_folder, "chat_history.json")
         
         # Load existing chat history if it exists
+        chat_data = {"normal assistant":[]}
         if os.path.exists(filename):
-            with open(filename, 'r') as f:
-                chat_data = json.load(f)
-        else:
-            chat_data = {"normal assistant": []}
+            try:
+                with open(filename, 'r',encoding="utf-8") as f:
+                    content = f.read().strip()
+                    if content:
+                        chat_data = json.loads(content)
+            except json.JSONDecodeError as e:
+                print(f"chat history corrupt : {e}")
         
         if assistant_type not in chat_data:
             chat_data[assistant_type] = []
@@ -86,6 +96,11 @@ def save_chat(messages, assistant_type, filename=None):
     except Exception as e:
         print(f"Failed to save chat: {e}")
         return False
+    
+def clear_conversation(file_path = "./chat_history.json"):
+    with open(file_path, 'w') as f:
+        json.dump([],f)
+        print("conversation has been cleared.")
 
 def load_chat_history(assistant_type, filename=None):
     """Load previous chat history for assistant """
@@ -122,10 +137,13 @@ class ASSISTANT:
             "PLAY_MUSIC" : lambda args : self.assistant.play_youtube_music(args.get("query")),
             "APP_RUNNING": lambda args : self.assistant.list_running_apps(),
             "PAUSE_MUSIC": lambda args: self.assistant.pause_song(),
-            "SAVE_NOTES" : lambda args : self.assistant.important_notes(args.get("notes")),
+            "SAVE_NOTES" : lambda args : self.assistant.important_notes(args.get("notes")) if isinstance(args, dict) else args,
+            "READ_NOTES" : lambda args : self.assistant.read_notes(),
             "WRITE_MESSAGE" : lambda args : self.assistant.write_text(args.get("app"),
                                                                       args.get("contact"),
-                                                                      args.get("text"))
+                                                                      args.get("text")),
+            "CLEAR_CONVERSATION" : lambda args : clear_conversation()
+
         }
         # load memory
         history = load_chat_history("normal assistant")
@@ -137,8 +155,9 @@ class ASSISTANT:
             self.messages = [
                 {"role": "system", "content": SYSTEM_PROMPT["normal assistant"]}
             ]
-        
-    def start_ai(self, user_input: str):
+    
+
+    def normal_assistant(self, user_input: str):
 
         self.messages.append({'role': 'user', 'content': user_input})
         
@@ -148,13 +167,19 @@ class ASSISTANT:
             # ai_response = response['message']['content']
             full_response = ""
             sentence_buffer = ""
+            try:
+                if "clear chat" in user_input.lower():
+                    clear_conversation()
+                    print("Done!")
+            except Exception as e:
+                print(f"Error : {e}")
 
             for chunk in response:
                 content = chunk['message']['content']
                 full_response += content
                 sentence_buffer += content
 
-                if any(p in content for p in [".","!","?","\n"]):
+                if any(p in content for p in [".","!","?","*","\n"]):
                     text_to_speak = re.sub(r'\[.*?\]', '', sentence_buffer).strip()
 
                     if text_to_speak:
@@ -174,19 +199,33 @@ class ASSISTANT:
             yield "sorry boss my brain got stalled :("
 
             # Check for and execute system commands
+    def extract_last(self,text :str):
+        end = text.rfind('}')
+        depth =0 
+        for i in range(end,-1,-1):
+            if text[i] == '}':
+                depth +=1
+            elif text[i] == '{':
+                depth -=1
+                if depth == 0:
+                    return text[i:end+1]
     def _handle_commands(self,ai_response : str):
         
         lines: list[str] = [l.strip() for l in ai_response.strip().splitlines() if l.strip()]
         
         if not lines: return
-
-        last = lines[-1]
-        if not last.startswith('{'): return
         
+        json_text = self.extract_last(ai_response)
+        if not json_text:
+            return None    
+     
         try:
-            payload = json.loads(last)
-        except Exception as e: print (f"error : {e}")
-        
+            payload = json.loads(json_text)
+        except json.JSONDecodeError as e: 
+            print (f"JSON parse error : {e}")
+            print(f"raw JSON text: {json_text}")
+            return 
+
         tool = payload.get("tool")
         args = payload.get("args", {})
         handler = self.command_registry.get(tool)
