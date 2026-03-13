@@ -10,7 +10,7 @@ from Research.local_RAG import LocalRag
 from Research.pdf_reader import PDFREADER
 
 # 1. Define the AI DNA
-SYSTEM_PROMPT = {"normal assistant":"""
+SYSTEM_PROMPT = """
 you are a helpfull assistant, do tasks under user's supervision, do whatever boss(user) orders, maintain a safety boundary, do not run anything by yourself, double ask every task when boss orders to do, respect your boss's every words.
 make a preview about the work the user told to do, and remember the apps or file you have opened and when boss says to close or delete recall the name and use that.
 use tools when boss orders you to do, never run anything by yourself, always ask before doing anything, if boss says to do something and you don't know how to do it, say "I don't know how to do that, boss. Can you please guide me?" and wait for instructions.
@@ -54,7 +54,7 @@ Available capabilities:
 
                  
 if boss(user) tells you to send some message or email and tells you to mention yourself then do: [Emma] i am boss's assitant....
-"""}
+"""
 
 chat_folder = "chat_logs"
 if not os.path.exists(chat_folder):
@@ -153,7 +153,7 @@ class ASSISTANT:
             self.messages = history[-1]["messages"][-20:]
         else:
             self.messages = [
-                {"role": "system", "content": SYSTEM_PROMPT["normal assistant"]}
+                {"role": "system", "content": SYSTEM_PROMPT}
             ]
     
 
@@ -187,9 +187,9 @@ class ASSISTANT:
                     sentence_buffer= ""
 
             if sentence_buffer.strip():
-                finral_text = re.sub(r'\[.*?\]', '', sentence_buffer).strip()
-                if finral_text:
-                    yield finral_text
+                final_text = re.sub(r'\[.*?\]', '', sentence_buffer).strip()
+                if final_text:
+                    yield final_text
 
             self.messages.append({'role': 'assistant', 'content': full_response})
             self._handle_commands(full_response)
