@@ -1,5 +1,7 @@
 # RAG 1.0 – Simple PDF Retrieval Augmented Generation
 
+Beside making assistant, I worked for making advanced RAG system. *also overview RAG4.0 repo.
+
 This project implements a **basic Retrieval Augmented Generation (RAG) system** designed to answer questions from **PDF documents**.
 
 The system reads PDF files, converts them into embeddings, stores them in a vector database, and retrieves relevant sections to help an LLM generate accurate answers.
