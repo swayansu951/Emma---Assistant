@@ -1,3 +1,24 @@
+# ZENITH
+
+A helpfull desktop assistant that can perform all basic tasks for you on a single command.
+
+# TOOLS
+
+for sending message just say/type send message <"throught_which"> to <"to whome"> that <"message">.
+
+for opening app just say/type 
+open app <"app_name">.
+
+also support closing the same as opening 
+*use close instead of open.
+
+searching for web, say/type 
+search web <"content">.
+
+*also it has pdf reading function & web crawling function but it's under development.
+
+*it's under development 
+
 # RAG 1.0 – Simple PDF Retrieval Augmented Generation
 
 Beside making assistant, I worked for making advanced RAG system. *also overview RAG4.0 repo.
